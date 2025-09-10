@@ -50,12 +50,7 @@ async def start_handler(_, message: Message) -> None:
     # إنشاء لوحة المفاتيح الرئيسية
     keyboard = [
         [
-            InlineKeyboardButton("📡 قنواتي", callback_data="channels_menu"),
-            InlineKeyboardButton("➕ إضافة قناة", callback_data="channels_add")
-        ],
-        [
-            InlineKeyboardButton("📋 عرض القنوات", callback_data="channels_list"),
-            InlineKeyboardButton("🗑 حذف قناة", callback_data="channels_delete")
+            InlineKeyboardButton("📡 إدارة القنوات", callback_data="channels_menu")
         ],
         [
             InlineKeyboardButton("📊 الإحصائيات", callback_data="stats"),
@@ -122,12 +117,7 @@ async def callback_handler(client, callback_query: CallbackQuery) -> None:
         
         keyboard = [
             [
-                InlineKeyboardButton("📡 قنواتي", callback_data="channels_menu"),
-                InlineKeyboardButton("➕ إضافة قناة", callback_data="channels_add")
-            ],
-            [
-                InlineKeyboardButton("📋 عرض القنوات", callback_data="channels_list"),
-                InlineKeyboardButton("🗑 حذف قناة", callback_data="channels_delete")
+                InlineKeyboardButton("📡 إدارة القنوات", callback_data="channels_menu")
             ],
             [
                 InlineKeyboardButton("📊 الإحصائيات", callback_data="stats"),
