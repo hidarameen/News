@@ -66,6 +66,35 @@ END$$;
 
 -- إنشاء فهرس للبحث السريع
 CREATE INDEX IF NOT EXISTS idx_channels_user_id ON channels(user_id);
+
+-- إعدادات الهيدر/الفوتر لكل مستخدم/قناة
+CREATE TABLE IF NOT EXISTS channel_settings (
+    id SERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    channel_id BIGINT NOT NULL,
+    header_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    header_text TEXT,
+    footer_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    footer_text TEXT,
+    parse_mode TEXT CHECK (parse_mode IN ('markdown', 'html')) NOT NULL DEFAULT 'markdown',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(user_id, channel_id),
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger WHERE tgname = 'channel_settings_set_updated_at'
+  ) THEN
+    CREATE TRIGGER channel_settings_set_updated_at
+    BEFORE UPDATE ON channel_settings
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+  END IF;
+END$$;
+
+CREATE INDEX IF NOT EXISTS idx_channel_settings_user_channel ON channel_settings(user_id, channel_id);
 """
 
 

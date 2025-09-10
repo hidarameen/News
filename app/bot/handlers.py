@@ -1,5 +1,6 @@
 from pyrogram import filters
 from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
+from pyrogram.enums import ParseMode
 
 from app.bot.client import get_bot_client
 from app.db.pool import get_pool
@@ -8,6 +9,8 @@ from app.bot.channels import (
     handle_channels_callback,
     handle_channel_input
 )
+from app.bot.header import header_menu, handle_header_callback, handle_header_text_input
+from app.bot.footer import footer_menu, handle_footer_callback, handle_footer_text_input
 
 
 bot = get_bot_client()
@@ -89,7 +92,7 @@ async def start_handler(_, message: Message) -> None:
     await message.reply_text(
         welcome_text,
         reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode="markdown"
+        parse_mode=ParseMode.MARKDOWN
     )
 
 
@@ -151,7 +154,7 @@ async def callback_handler(client, callback_query: CallbackQuery) -> None:
         await callback_query.message.edit_text(
             main_menu_text,
             reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode="markdown"
+            parse_mode=ParseMode.MARKDOWN
         )
         await callback_query.answer()
     
@@ -192,7 +195,7 @@ async def callback_handler(client, callback_query: CallbackQuery) -> None:
         await callback_query.message.edit_text(
             stats_text,
             reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode="markdown"
+            parse_mode=ParseMode.MARKDOWN
         )
         await callback_query.answer()
     
@@ -230,7 +233,7 @@ async def callback_handler(client, callback_query: CallbackQuery) -> None:
         await callback_query.message.edit_text(
             help_text,
             reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode="markdown"
+            parse_mode=ParseMode.MARKDOWN
         )
         await callback_query.answer()
     
@@ -263,12 +266,70 @@ async def callback_handler(client, callback_query: CallbackQuery) -> None:
         await callback_query.message.edit_text(
             about_text,
             reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode="markdown"
+            parse_mode=ParseMode.MARKDOWN
         )
         await callback_query.answer()
     
     elif data == "settings":
-        await callback_query.answer("⚙️ الإعدادات قيد التطوير...", show_alert=True)
+        # فتح قائمة اختيار القناة لإدارة الإعدادات
+        pool = await get_pool()
+        async with pool.connection() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    "SELECT channel_id, channel_title FROM channels WHERE user_id = %s ORDER BY created_at DESC",
+                    (user.id,)
+                )
+                rows = await cur.fetchall()
+        if not rows:
+            await callback_query.answer("لا توجد قنوات لإعدادها", show_alert=True)
+            return
+        keyboard = []
+        for cid, title in rows:
+            display = title or f"{cid}"
+            keyboard.append([InlineKeyboardButton(f"⚙️ {display}", callback_data=f"settings_channel_{cid}")])
+        keyboard.append([InlineKeyboardButton("🔙 رجوع", callback_data="main_menu")])
+        await callback_query.message.edit_text(
+            """
+╭━━━━━━━━━━━━━━━━━━━━━╮
+   ⚙️ إعدادات القنوات
+╰━━━━━━━━━━━━━━━━━━━━━╯
+
+اختر قناة لإدارة الهيدر/الفوتر
+""",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode=ParseMode.MARKDOWN,
+        )
+        await callback_query.answer()
+    elif data.startswith("settings_channel_"):
+        channel_id = int(data.split("_")[-1])
+        # قائمة إعدادات القناة
+        keyboard = [
+            [InlineKeyboardButton("🧩 الهيدر", callback_data=f"header_menu_{channel_id}")],
+            [InlineKeyboardButton("🧩 الفوتر", callback_data=f"footer_menu_{channel_id}")],
+            [InlineKeyboardButton("🔙 رجوع", callback_data="settings")],
+        ]
+        await callback_query.message.edit_text(
+            f"""
+إعدادات القناة: `{channel_id}`
+
+اختر القسم:
+""",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode=ParseMode.MARKDOWN,
+        )
+        await callback_query.answer()
+    elif data.startswith("header_menu_"):
+        channel_id = int(data.split("_")[-1])
+        await header_menu(client, callback_query.message, user.id, channel_id)
+        await callback_query.answer()
+    elif data.startswith("footer_menu_"):
+        channel_id = int(data.split("_")[-1])
+        await footer_menu(client, callback_query.message, user.id, channel_id)
+        await callback_query.answer()
+    elif data.startswith("header_"):
+        await handle_header_callback(client, callback_query)
+    elif data.startswith("footer_"):
+        await handle_footer_callback(client, callback_query)
 
 
 # معالج أمر القنوات
@@ -285,6 +346,10 @@ async def text_handler(client, message: Message) -> None:
     # التحقق من حالة المستخدم
     if user_id in user_states and user_states[user_id] == "waiting_channels":
         await handle_channel_input(client, message)
+        return
+    # التدفقات الخاصة بالهيدر/الفوتر
+    await handle_header_text_input(client, message)
+    await handle_footer_text_input(client, message)
 
 
 # وظائف مساعدة لإدارة حالات المستخدمين

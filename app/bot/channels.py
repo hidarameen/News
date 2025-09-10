@@ -14,6 +14,7 @@ from pyrogram.types import (
     CallbackQuery,
     Chat
 )
+from pyrogram.enums import ParseMode
 from pyrogram.errors import (
     UserNotParticipant,
     ChatAdminRequired,
@@ -23,6 +24,8 @@ from pyrogram.errors import (
 )
 
 from app.db.pool import get_pool
+from app.bot.header import HeaderManager
+from app.bot.footer import FooterManager
 
 logger = logging.getLogger(__name__)
 
@@ -218,7 +221,7 @@ async def channels_menu(client: Client, message: Message) -> None:
     await message.reply_text(
         text,
         reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode="markdown"
+        parse_mode=ParseMode.MARKDOWN
     )
 
 
@@ -250,7 +253,7 @@ async def handle_channels_callback(client: Client, callback_query: CallbackQuery
 ━━━━━━━━━━━━━━━━━━━━━
 ❌ للإلغاء أرسل: /cancel
 """,
-            parse_mode="markdown"
+            parse_mode=ParseMode.MARKDOWN
         )
         # تعيين حالة المستخدم لانتظار القنوات
         await client.set_user_state(user_id, "waiting_channels")
@@ -282,7 +285,7 @@ async def handle_channels_callback(client: Client, callback_query: CallbackQuery
         await callback_query.message.edit_text(
             text,
             reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode="markdown"
+            parse_mode=ParseMode.MARKDOWN
         )
         
     elif data == "channels_delete":
@@ -312,7 +315,7 @@ async def handle_channels_callback(client: Client, callback_query: CallbackQuery
 ⚠️ **اختر القناة التي تريد حذفها:**
 """,
             reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode="markdown"
+            parse_mode=ParseMode.MARKDOWN
         )
         
     elif data.startswith("delete_channel_"):
@@ -358,7 +361,7 @@ async def handle_channels_callback(client: Client, callback_query: CallbackQuery
         await callback_query.message.edit_text(
             stats_text,
             reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode="markdown"
+            parse_mode=ParseMode.MARKDOWN
         )
         
     elif data == "channels_menu":
@@ -427,6 +430,12 @@ async def handle_channel_input(client: Client, message: Message) -> None:
         
         if success:
             added_channels.append(chat.title)
+            # تهيئة افتراضية للهيدر/الفوتر للسجل الجديد
+            try:
+                await HeaderManager.upsert(user_id, chat.id, None, False, "markdown")
+                await FooterManager.upsert(user_id, chat.id, None, False, "markdown")
+            except Exception as e:
+                logger.warning(f"تعذر تهيئة إعدادات القناة {chat.id}: {e}")
         else:
             failed_channels.append(f"{chat.title} - خطأ في الحفظ")
     
@@ -462,7 +471,7 @@ async def handle_channel_input(client: Client, message: Message) -> None:
     await processing_msg.edit_text(
         result_text,
         reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode="markdown"
+        parse_mode=ParseMode.MARKDOWN
     )
 
 
