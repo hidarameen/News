@@ -14,7 +14,7 @@ from pyrogram.types import (
     CallbackQuery,
     Chat
 )
-from pyrogram.enums import ParseMode
+from pyrogram.enums import ParseMode, ChatType
 from pyrogram.errors import (
     UserNotParticipant,
     ChatAdminRequired,
@@ -102,7 +102,7 @@ class ChannelManager:
             logger.info(f"تم العثور على: {chat.title} (ID: {chat.id}, Type: {chat.type})")
             
             # التحقق من أن هذه قناة وليست مجموعة عادية
-            if chat.type not in ["channel", "supergroup"]:
+            if chat.type not in [ChatType.CHANNEL, ChatType.SUPERGROUP]:
                 logger.warning(f"النوع غير صحيح: {chat.type}")
                 return False, None
                 
@@ -445,7 +445,7 @@ async def handle_channel_input(client: Client, message: Message) -> None:
     # معالجة الرسائل المحولة
     if message.forward_from_chat:
         chat = message.forward_from_chat
-        if chat.type in ["channel", "supergroup"]:
+        if chat.type in [ChatType.CHANNEL, ChatType.SUPERGROUP]:
             channels_to_check = [chat.id]
         else:
             await message.reply_text("⚠️ هذه ليست قناة! يرجى توجيه رسالة من قناة.")
