@@ -54,8 +54,13 @@ class ChannelManager:
             if line.lstrip('-').isdigit():
                 channel_id = int(line)
                 # التأكد من أن الـ ID سالب (قناة)
+                # إذا كان موجب، فحوله لتنسيق القناة الصحيح
                 if channel_id > 0:
-                    channel_id = -100 * abs(channel_id)
+                    # تحويل ID الموجب إلى تنسيق القناة السالب
+                    if len(str(channel_id)) >= 10:
+                        channel_id = -100 - channel_id
+                    else:
+                        channel_id = -channel_id
                 channels.append(channel_id)
                 logger.debug(f"تم استخراج ID: {channel_id}")
                 
@@ -72,9 +77,12 @@ class ChannelManager:
                 match = re.search(r't(?:elegram)?\.me/([a-zA-Z0-9_]+)', line)
                 if match:
                     username = match.group(1)
-                    if not username.startswith('joinchat'):
+                    # تجاهل روابط الانضمام وروابط البوت
+                    if not username.startswith(('joinchat', 'c/', 's/')) and not username.endswith('bot'):
                         channels.append(f"@{username}")
                         logger.debug(f"تم استخراج من رابط: @{username}")
+                    else:
+                        logger.debug(f"تم تجاهل رابط غير صالح: {username}")
             
             # محاولة أخيرة للتعرف على username بدون @
             elif re.match(r'^[a-zA-Z][a-zA-Z0-9_]{4,31}$', line):
@@ -90,11 +98,14 @@ class ChannelManager:
         try:
             # تنظيف معرف القناة إذا كان username
             if isinstance(channel_id, str):
-                # إزالة @ من البداية إذا وجدت
+                # إذا كان يبدأ بـ @ فهو معرف مستخدم صحيح
                 if channel_id.startswith('@'):
-                    channel_id = channel_id[1:]
-                # إضافة @ مرة أخرى للتأكد من التنسيق الصحيح
-                if not channel_id.startswith('@') and not channel_id.lstrip('-').isdigit():
+                    pass  # لا نحتاج لتغيير شيء
+                # إذا كان رقمي فهو ID
+                elif channel_id.lstrip('-').isdigit():
+                    pass  # لا نحتاج لتغيير شيء
+                # إذا لم يبدأ بـ @ وليس رقمي، فأضف @
+                else:
                     channel_id = f"@{channel_id}"
             
             logger.info(f"محاولة الوصول للقناة: {channel_id}")
@@ -145,7 +156,17 @@ class ChannelManager:
             logger.error(f"المحادثة غير صالحة {channel_id}: {e}")
             return False, None
         except Exception as e:
-            logger.error(f"خطأ غير متوقع في التحقق من القناة {channel_id}: {type(e).__name__}: {e}")
+            error_type = type(e).__name__
+            logger.error(f"خطأ غير متوقع في التحقق من القناة {channel_id}: {error_type}: {e}")
+            
+            # معالجة أخطاء شائعة إضافية
+            if "CHAT_ADMIN_REQUIRED" in str(e):
+                logger.error(f"البوت يحتاج صلاحيات مشرف في {channel_id}")
+            elif "USER_NOT_PARTICIPANT" in str(e):
+                logger.error(f"البوت ليس عضو في {channel_id}")
+            elif "PEER_ID_INVALID" in str(e):
+                logger.error(f"معرف القناة غير صحيح: {channel_id}")
+            
             return False, None
     
     @staticmethod
@@ -447,8 +468,13 @@ async def handle_channel_input(client: Client, message: Message) -> None:
         chat = message.forward_from_chat
         if chat.type in [ChatType.CHANNEL, ChatType.SUPERGROUP]:
             channels_to_check = [chat.id]
+            logger.info(f"تم استخراج قناة من رسالة محولة: {chat.title} (ID: {chat.id})")
         else:
-            await message.reply_text("⚠️ هذه ليست قناة! يرجى توجيه رسالة من قناة.")
+            await message.reply_text(
+                f"⚠️ هذه ليست قناة! نوع المحادثة: {chat.type}\n"
+                f"يرجى توجيه رسالة من قناة أو سوبر جروب."
+            )
+            await client.set_user_state(user_id, None)
             return
     
     # معالجة النص المدخل
@@ -460,6 +486,25 @@ async def handle_channel_input(client: Client, message: Message) -> None:
             return
     else:
         await message.reply_text("⚠️ يرجى إرسال نص أو توجيه رسالة من قناة!")
+        return
+    
+    # التحقق من الحد الأقصى للقنوات
+    current_count = await ChannelManager.get_channel_count(user_id)
+    max_channels = 50
+    
+    if current_count >= max_channels:
+        await message.reply_text(f"⚠️ لقد وصلت للحد الأقصى من القنوات ({max_channels} قناة)!")
+        await client.set_user_state(user_id, None)
+        return
+    
+    # التحقق من عدد القنوات الجديدة
+    remaining_slots = max_channels - current_count
+    if len(channels_to_check) > remaining_slots:
+        await message.reply_text(
+            f"⚠️ يمكنك إضافة {remaining_slots} قناة فقط!\n"
+            f"لديك {current_count} قناة من أصل {max_channels}"
+        )
+        await client.set_user_state(user_id, None)
         return
     
     # معالجة القنوات
