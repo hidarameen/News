@@ -185,12 +185,14 @@ async def channels_menu(client: Client, message: Message) -> None:
     
     keyboard = [
         [
-            InlineKeyboardButton("➕ إضافة قناة", callback_data="channels_add"),
-            InlineKeyboardButton("📋 عرض القنوات", callback_data="channels_list")
+            InlineKeyboardButton("➕ إضافة قناة", callback_data="channels_add")
         ],
         [
-            InlineKeyboardButton("🗑 حذف قناة", callback_data="channels_delete"),
-            InlineKeyboardButton("📊 الإحصائيات", callback_data="channel_stats")
+            InlineKeyboardButton("📋 عرض قنواتي", callback_data="channels_list"),
+            InlineKeyboardButton("🗑 حذف قناة", callback_data="channels_delete")
+        ],
+        [
+            InlineKeyboardButton("📊 إحصائيات القنوات", callback_data="channel_stats")
         ],
         [InlineKeyboardButton("🔙 القائمة الرئيسية", callback_data="main_menu")]
     ]
