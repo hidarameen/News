@@ -20,7 +20,10 @@ from pyrogram.errors import (
     ChatAdminRequired,
     PeerIdInvalid,
     UsernameNotOccupied,
-    ChannelPrivate
+    ChannelPrivate,
+    UsernameInvalid,
+    ChannelInvalid,
+    ChatInvalid
 )
 
 from app.db.pool import get_pool
@@ -43,6 +46,9 @@ class ChannelManager:
             line = line.strip()
             if not line:
                 continue
+            
+            # تسجيل المحاولة
+            logger.debug(f"محاولة استخراج قناة من: {line}")
                 
             # التحقق من ID رقمي
             if line.lstrip('-').isdigit():
@@ -51,10 +57,14 @@ class ChannelManager:
                 if channel_id > 0:
                     channel_id = -100 * abs(channel_id)
                 channels.append(channel_id)
+                logger.debug(f"تم استخراج ID: {channel_id}")
                 
             # التحقق من معرف القناة @username
             elif line.startswith('@'):
-                channels.append(line)
+                # تنظيف المعرف من المسافات والأحرف الإضافية
+                username = line.split()[0].strip()
+                channels.append(username)
+                logger.debug(f"تم استخراج username: {username}")
                 
             # التحقق من رابط القناة
             elif 't.me/' in line or 'telegram.me/' in line:
@@ -64,34 +74,78 @@ class ChannelManager:
                     username = match.group(1)
                     if not username.startswith('joinchat'):
                         channels.append(f"@{username}")
+                        logger.debug(f"تم استخراج من رابط: @{username}")
+            
+            # محاولة أخيرة للتعرف على username بدون @
+            elif re.match(r'^[a-zA-Z][a-zA-Z0-9_]{4,31}$', line):
+                channels.append(f"@{line}")
+                logger.debug(f"تم استخراج username محتمل: @{line}")
                         
+        logger.info(f"تم استخراج {len(channels)} قناة من النص")
         return channels
     
     @staticmethod
     async def check_bot_admin(client: Client, channel_id: Union[int, str]) -> tuple[bool, Optional[Chat]]:
         """التحقق من أن البوت مشرف في القناة"""
         try:
+            # تنظيف معرف القناة إذا كان username
+            if isinstance(channel_id, str):
+                # إزالة @ من البداية إذا وجدت
+                if channel_id.startswith('@'):
+                    channel_id = channel_id[1:]
+                # إضافة @ مرة أخرى للتأكد من التنسيق الصحيح
+                if not channel_id.startswith('@') and not channel_id.lstrip('-').isdigit():
+                    channel_id = f"@{channel_id}"
+            
+            logger.info(f"محاولة الوصول للقناة: {channel_id}")
             chat = await client.get_chat(channel_id)
+            logger.info(f"تم العثور على: {chat.title} (ID: {chat.id}, Type: {chat.type})")
             
             # التحقق من أن هذه قناة وليست مجموعة عادية
             if chat.type not in ["channel", "supergroup"]:
+                logger.warning(f"النوع غير صحيح: {chat.type}")
                 return False, None
                 
             # التحقق من صلاحيات البوت
+            logger.info(f"التحقق من صلاحيات البوت في {chat.id}")
             bot_member = await client.get_chat_member(chat.id, "me")
+            logger.info(f"حالة البوت: {bot_member.status}")
             
             # التحقق من أن البوت مشرف
             if bot_member.status in ["administrator", "creator"]:
+                logger.info(f"✅ البوت مشرف في {chat.title}")
                 return True, chat
+            else:
+                logger.warning(f"❌ البوت ليس مشرفاً في {chat.title} (Status: {bot_member.status})")
             
             return False, chat
             
-        except (UserNotParticipant, ChatAdminRequired):
+        except UserNotParticipant as e:
+            logger.error(f"البوت ليس عضواً في القناة {channel_id}: {e}")
             return False, None
-        except (PeerIdInvalid, UsernameNotOccupied, ChannelPrivate):
+        except ChatAdminRequired as e:
+            logger.error(f"البوت يحتاج صلاحيات مشرف في {channel_id}: {e}")
+            return False, None
+        except PeerIdInvalid as e:
+            logger.error(f"معرف القناة غير صالح {channel_id}: {e}")
+            return False, None
+        except UsernameNotOccupied as e:
+            logger.error(f"اسم المستخدم غير موجود {channel_id}: {e}")
+            return False, None
+        except ChannelPrivate as e:
+            logger.error(f"القناة خاصة {channel_id}: {e}")
+            return False, None
+        except UsernameInvalid as e:
+            logger.error(f"اسم المستخدم غير صالح {channel_id}: {e}")
+            return False, None
+        except ChannelInvalid as e:
+            logger.error(f"القناة غير صالحة {channel_id}: {e}")
+            return False, None
+        except ChatInvalid as e:
+            logger.error(f"المحادثة غير صالحة {channel_id}: {e}")
             return False, None
         except Exception as e:
-            logger.error(f"خطأ في التحقق من القناة {channel_id}: {e}")
+            logger.error(f"خطأ غير متوقع في التحقق من القناة {channel_id}: {type(e).__name__}: {e}")
             return False, None
     
     @staticmethod
@@ -412,17 +466,23 @@ async def handle_channel_input(client: Client, message: Message) -> None:
     processing_msg = await message.reply_text("⏳ جاري معالجة القنوات...")
     
     for channel_info in channels_to_check:
+        logger.info(f"معالجة القناة: {channel_info}")
         is_admin, chat = await ChannelManager.check_bot_admin(client, channel_info)
         
         if not chat:
-            failed_channels.append(f"{channel_info} - قناة غير موجودة")
+            error_msg = f"{channel_info} - قناة غير موجودة أو لا يمكن الوصول إليها"
+            logger.error(f"❌ {error_msg}")
+            failed_channels.append(error_msg)
             continue
         
         if not is_admin:
-            failed_channels.append(f"{chat.title} - البوت ليس مشرفاً")
+            error_msg = f"{chat.title} - البوت ليس مشرفاً"
+            logger.warning(f"⚠️ {error_msg}")
+            failed_channels.append(error_msg)
             continue
         
         # إضافة القناة
+        logger.info(f"إضافة القناة: {chat.title} (ID: {chat.id})")
         success = await ChannelManager.add_channel(
             user_id,
             chat.id,
@@ -432,6 +492,7 @@ async def handle_channel_input(client: Client, message: Message) -> None:
         
         if success:
             added_channels.append(chat.title)
+            logger.info(f"✅ تمت إضافة القناة: {chat.title}")
             # تهيئة افتراضية للهيدر/الفوتر للسجل الجديد
             try:
                 await HeaderManager.upsert(user_id, chat.id, None, False, "markdown")
@@ -439,7 +500,9 @@ async def handle_channel_input(client: Client, message: Message) -> None:
             except Exception as e:
                 logger.warning(f"تعذر تهيئة إعدادات القناة {chat.id}: {e}")
         else:
-            failed_channels.append(f"{chat.title} - خطأ في الحفظ")
+            error_msg = f"{chat.title} - خطأ في الحفظ"
+            logger.error(f"❌ {error_msg}")
+            failed_channels.append(error_msg)
     
     # إنشاء رسالة النتيجة
     result_text = """╭━━━━━━━━━━━━━━━━━━━━━╮
