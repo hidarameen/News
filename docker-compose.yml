@@ -10,7 +10,7 @@ services:
       - API_HASH=
       - WEBHOOK_BASE=
       - PORT=8080
-      - DATABASE_URL=
+      - DATABASE_URL=postgresql://bot:bot@postgres:5432/botdb
       - REDIS_URL=redis://redis:6379/0
     depends_on:
       - postgres

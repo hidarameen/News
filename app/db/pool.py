@@ -1,17 +1,18 @@
-import asyncpg
+from psycopg_pool import AsyncConnectionPool
+from psycopg import AsyncConnection
 from typing import Optional
 
 from app.core.settings import get_settings
 
 
-_pool: Optional[asyncpg.Pool] = None
+_pool: Optional[AsyncConnectionPool] = None
 
 
-async def get_pool() -> asyncpg.Pool:
+async def get_pool() -> AsyncConnectionPool:
     global _pool
     if _pool is None:
         settings = get_settings()
-        _pool = await asyncpg.create_pool(dsn=settings.database_url, min_size=1, max_size=10)
+        _pool = AsyncConnectionPool(conninfo=settings.database_url, min_size=1, max_size=10)
     return _pool
 
 
