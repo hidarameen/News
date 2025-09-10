@@ -357,6 +357,7 @@ async def get_user_state(client, user_id: int) -> str:
 
 
 # إضافة الوظائف للـ client
-bot.set_user_state = set_user_state
-bot.get_user_state = get_user_state
+import functools
+bot.set_user_state = functools.partial(set_user_state, bot)
+bot.get_user_state = functools.partial(get_user_state, bot)
 

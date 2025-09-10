@@ -49,8 +49,9 @@ async def on_startup() -> None:
     await bot.start()
 
     # إرفاق دوال إدارة الحالة بالعميل لاستخدامها مع منطق القنوات
-    setattr(bot, "set_user_state", set_user_state)
-    setattr(bot, "get_user_state", get_user_state)
+    import functools
+    setattr(bot, "set_user_state", functools.partial(set_user_state, bot))
+    setattr(bot, "get_user_state", functools.partial(get_user_state, bot))
 
     if settings.webhook_base and settings.bot_token:
         webhook_url = f"{settings.webhook_base.rstrip('/')}{settings.webhook_path}"
