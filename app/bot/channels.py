@@ -181,24 +181,38 @@ async def channels_menu(client: Client, message: Message) -> None:
     count = await ChannelManager.get_channel_count(user_id)
     
     keyboard = [
-        [InlineKeyboardButton("➕ إضافة قنوات", callback_data="channels_add")],
-        [InlineKeyboardButton("📋 عرض قنواتي", callback_data="channels_list")],
-        [InlineKeyboardButton("🗑 حذف قناة", callback_data="channels_delete")],
-        [InlineKeyboardButton("🔙 رجوع", callback_data="main_menu")]
+        [
+            InlineKeyboardButton("➕ إضافة قناة", callback_data="channels_add"),
+            InlineKeyboardButton("📋 عرض القنوات", callback_data="channels_list")
+        ],
+        [
+            InlineKeyboardButton("🗑 حذف قناة", callback_data="channels_delete"),
+            InlineKeyboardButton("📊 الإحصائيات", callback_data="channel_stats")
+        ],
+        [InlineKeyboardButton("🔙 القائمة الرئيسية", callback_data="main_menu")]
     ]
     
     text = f"""
-📡 **إدارة القنوات**
+╭━━━━━━━━━━━━━━━━━━━━━╮
+    📡 **إدارة القنوات**
+╰━━━━━━━━━━━━━━━━━━━━━╯
 
-لديك حالياً: **{count}** قناة
+📊 **الإحصائيات:**
+• القنوات المضافة: **{count}**
+• الحد الأقصى: **50** قناة
 
-يمكنك إضافة قنواتك الخاصة عبر:
-• إرسال معرف القناة (@username)
-• إرسال رابط القناة
-• إرسال ID القناة
+━━━━━━━━━━━━━━━━━━━━━
+📝 **طرق إضافة القنوات:**
+
+• معرف القناة: @username
+• رابط القناة: t.me/username
+• معرف رقمي: -100xxxxxxxxx
 • توجيه رسالة من القناة
 
-⚠️ **ملاحظة:** يجب أن يكون البوت مشرفاً في القناة
+━━━━━━━━━━━━━━━━━━━━━
+⚠️ **تنبيه:** يجب أن يكون البوت مشرفاً في القناة
+
+⬇️ **اختر من القائمة:**
 """
     
     await message.reply_text(
@@ -216,18 +230,25 @@ async def handle_channels_callback(client: Client, callback_query: CallbackQuery
     if data == "channels_add":
         await callback_query.message.edit_text(
             """
-➕ **إضافة قنوات جديدة**
+╭━━━━━━━━━━━━━━━━━━━━━╮
+    ➕ **إضافة قنوات جديدة**
+╰━━━━━━━━━━━━━━━━━━━━━╯
 
-أرسل القنوات التي تريد إضافتها بإحدى الطرق التالية:
+📝 **أرسل القنوات بإحدى الطرق:**
 
-1️⃣ **معرف القناة:** @channel_username
-2️⃣ **رابط القناة:** https://t.me/channel_username
-3️⃣ **ID القناة:** -1001234567890
-4️⃣ **توجيه رسالة من القناة**
+1️⃣ معرف القناة: @channel_username
+2️⃣ رابط القناة: t.me/channel_username
+3️⃣ معرف رقمي: -1001234567890
+4️⃣ توجيه رسالة من القناة
 
-يمكنك إرسال عدة قنوات دفعة واحدة (كل قناة في سطر منفصل)
+━━━━━━━━━━━━━━━━━━━━━
+💡 **نصائح:**
+• يمكنك إرسال عدة قنوات دفعة واحدة
+• ضع كل قناة في سطر منفصل
+• تأكد من أن البوت مشرف في القناة
 
-للإلغاء أرسل: /cancel
+━━━━━━━━━━━━━━━━━━━━━
+❌ للإلغاء أرسل: /cancel
 """,
             parse_mode="markdown"
         )
@@ -241,16 +262,20 @@ async def handle_channels_callback(client: Client, callback_query: CallbackQuery
             await callback_query.answer("لا توجد قنوات مضافة بعد!", show_alert=True)
             return
         
-        text = "📋 **قنواتك المضافة:**\n\n"
+        text = """╭━━━━━━━━━━━━━━━━━━━━━╮
+    📋 **قنواتك المضافة**
+╰━━━━━━━━━━━━━━━━━━━━━╯\n\n"""
+        
         for i, channel in enumerate(channels, 1):
             title = channel['channel_title'] or "بدون اسم"
             username = channel['channel_username'] or ""
             channel_id = channel['channel_id']
             
-            text += f"{i}. **{title}**\n"
+            text += f"**{i}.** {title}\n"
             if username:
-                text += f"   🔗 @{username}\n"
-            text += f"   🆔 `{channel_id}`\n\n"
+                text += f"   └ @{username}\n"
+            text += f"   └ ID: `{channel_id}`\n"
+            text += "━━━━━━━━━━━━━━━━━━━━━\n"
         
         keyboard = [[InlineKeyboardButton("🔙 رجوع", callback_data="channels_menu")]]
         
@@ -280,7 +305,12 @@ async def handle_channels_callback(client: Client, callback_query: CallbackQuery
         keyboard.append([InlineKeyboardButton("🔙 رجوع", callback_data="channels_menu")])
         
         await callback_query.message.edit_text(
-            "🗑 **اختر القناة التي تريد حذفها:**",
+            """╭━━━━━━━━━━━━━━━━━━━━━╮
+    🗑 **حذف القنوات**
+╰━━━━━━━━━━━━━━━━━━━━━╯
+
+⚠️ **اختر القناة التي تريد حذفها:**
+""",
             reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode="markdown"
         )
@@ -295,6 +325,41 @@ async def handle_channels_callback(client: Client, callback_query: CallbackQuery
         
         # العودة لقائمة الحذف
         await handle_channels_callback(client, callback_query)
+        
+    elif data == "channel_stats":
+        # عرض إحصائيات القنوات
+        channels = await ChannelManager.get_user_channels(user_id)
+        count = len(channels)
+        
+        stats_text = f"""╭━━━━━━━━━━━━━━━━━━━━━╮
+    📊 **إحصائيات القنوات**
+╰━━━━━━━━━━━━━━━━━━━━━╯
+
+📈 **الملخص:**
+• إجمالي القنوات: **{count}**
+• القنوات النشطة: **{count}**
+• الحد الأقصى: **50** قناة
+• المتبقي: **{50 - count}** قناة
+
+━━━━━━━━━━━━━━━━━━━━━
+"""
+        
+        if channels:
+            stats_text += "\n📋 **تفاصيل القنوات:**\n\n"
+            for i, channel in enumerate(channels[:5], 1):
+                title = channel['channel_title'] or "بدون اسم"
+                stats_text += f"{i}. {title}\n"
+            
+            if count > 5:
+                stats_text += f"\n... و {count - 5} قناة أخرى"
+        
+        keyboard = [[InlineKeyboardButton("🔙 رجوع", callback_data="channels_menu")]]
+        
+        await callback_query.message.edit_text(
+            stats_text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="markdown"
+        )
         
     elif data == "channels_menu":
         await channels_menu(client, callback_query.message)
@@ -366,21 +431,28 @@ async def handle_channel_input(client: Client, message: Message) -> None:
             failed_channels.append(f"{chat.title} - خطأ في الحفظ")
     
     # إنشاء رسالة النتيجة
-    result_text = ""
+    result_text = """╭━━━━━━━━━━━━━━━━━━━━━╮
+    📊 **نتيجة العملية**
+╰━━━━━━━━━━━━━━━━━━━━━╯
+
+"""
     
     if added_channels:
-        result_text += f"✅ **تم إضافة {len(added_channels)} قناة:**\n"
+        result_text += f"✅ **تم إضافة بنجاح: {len(added_channels)}**\n"
         for channel in added_channels:
-            result_text += f"• {channel}\n"
+            result_text += f"  └ {channel}\n"
         result_text += "\n"
     
     if failed_channels:
-        result_text += f"❌ **فشل إضافة {len(failed_channels)} قناة:**\n"
+        result_text += f"❌ **فشل الإضافة: {len(failed_channels)}**\n"
         for channel in failed_channels:
-            result_text += f"• {channel}\n"
+            result_text += f"  └ {channel}\n"
+        result_text += "\n"
     
-    if not result_text:
-        result_text = "⚠️ لم يتم إضافة أي قناة!"
+    if not added_channels and not failed_channels:
+        result_text += "⚠️ **لم يتم إضافة أي قناة!**\n"
+    
+    result_text += "━━━━━━━━━━━━━━━━━━━━━"
     
     # إعادة تعيين حالة المستخدم
     await client.set_user_state(user_id, None)

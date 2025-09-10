@@ -36,15 +36,60 @@ async def start_handler(_, message: Message) -> None:
                 (user.id, user.username, user.first_name, user.last_name, user.language_code)
             )
             await conn.commit()
+            
+            # الحصول على عدد القنوات
+            await cur.execute(
+                "SELECT COUNT(*) FROM channels WHERE user_id = %s",
+                (user.id,)
+            )
+            channel_count = (await cur.fetchone())[0] or 0
+    
     # إنشاء لوحة المفاتيح الرئيسية
     keyboard = [
-        [InlineKeyboardButton("📡 القنوات", callback_data="channels_menu")],
-        [InlineKeyboardButton("⚙️ الإعدادات", callback_data="settings")]
+        [
+            InlineKeyboardButton("📡 قنواتي", callback_data="channels_menu"),
+            InlineKeyboardButton("➕ إضافة قناة", callback_data="channels_add")
+        ],
+        [
+            InlineKeyboardButton("📋 عرض القنوات", callback_data="channels_list"),
+            InlineKeyboardButton("🗑 حذف قناة", callback_data="channels_delete")
+        ],
+        [
+            InlineKeyboardButton("📊 الإحصائيات", callback_data="stats"),
+            InlineKeyboardButton("⚙️ الإعدادات", callback_data="settings")
+        ],
+        [
+            InlineKeyboardButton("📖 المساعدة", callback_data="help"),
+            InlineKeyboardButton("ℹ️ حول البوت", callback_data="about")
+        ]
     ]
     
+    # رسالة الترحيب المحسنة
+    welcome_text = f"""
+╭━━━━━━━━━━━━━━━━━━━━━╮
+    🤖 **مرحباً بك في بوت إدارة القنوات**
+╰━━━━━━━━━━━━━━━━━━━━━╯
+
+👤 **المستخدم:** {user.first_name}
+🆔 **معرفك:** `{user.id}`
+📡 **القنوات المضافة:** {channel_count}
+
+━━━━━━━━━━━━━━━━━━━━━
+🎯 **الميزات المتاحة:**
+
+• إدارة قنواتك بسهولة
+• إضافة وحذف القنوات
+• عرض إحصائيات مفصلة
+• واجهة سهلة الاستخدام
+
+━━━━━━━━━━━━━━━━━━━━━
+⬇️ **اختر من القائمة أدناه:**
+"""
+    
     await message.reply_text(
-        "مرحبًا بك في البوت! ✨\n\nاختر من القائمة أدناه:",
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        welcome_text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="markdown"
     )
 
 
@@ -52,6 +97,7 @@ async def start_handler(_, message: Message) -> None:
 @bot.on_callback_query()
 async def callback_handler(client, callback_query: CallbackQuery) -> None:
     data = callback_query.data
+    user = callback_query.from_user
     
     # معالجة أزرار القنوات
     if data == "channels_menu":
@@ -61,18 +107,168 @@ async def callback_handler(client, callback_query: CallbackQuery) -> None:
         await handle_channels_callback(client, callback_query)
         await callback_query.answer()
     elif data == "main_menu":
-        # العودة للقائمة الرئيسية
+        # العودة للقائمة الرئيسية المحسنة
+        pool = await get_pool()
+        async with pool.connection() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    "SELECT COUNT(*) FROM channels WHERE user_id = %s",
+                    (user.id,)
+                )
+                channel_count = (await cur.fetchone())[0] or 0
+        
         keyboard = [
-            [InlineKeyboardButton("📡 القنوات", callback_data="channels_menu")],
-            [InlineKeyboardButton("⚙️ الإعدادات", callback_data="settings")]
+            [
+                InlineKeyboardButton("📡 قنواتي", callback_data="channels_menu"),
+                InlineKeyboardButton("➕ إضافة قناة", callback_data="channels_add")
+            ],
+            [
+                InlineKeyboardButton("📋 عرض القنوات", callback_data="channels_list"),
+                InlineKeyboardButton("🗑 حذف قناة", callback_data="channels_delete")
+            ],
+            [
+                InlineKeyboardButton("📊 الإحصائيات", callback_data="stats"),
+                InlineKeyboardButton("⚙️ الإعدادات", callback_data="settings")
+            ],
+            [
+                InlineKeyboardButton("📖 المساعدة", callback_data="help"),
+                InlineKeyboardButton("ℹ️ حول البوت", callback_data="about")
+            ]
         ]
+        
+        main_menu_text = f"""
+╭━━━━━━━━━━━━━━━━━━━━━╮
+    🤖 **القائمة الرئيسية**
+╰━━━━━━━━━━━━━━━━━━━━━╯
+
+👤 **المستخدم:** {user.first_name}
+📡 **القنوات المضافة:** {channel_count}
+
+━━━━━━━━━━━━━━━━━━━━━
+⬇️ **اختر من القائمة أدناه:**
+"""
+        
         await callback_query.message.edit_text(
-            "القائمة الرئيسية:\n\nاختر من القائمة أدناه:",
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            main_menu_text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="markdown"
         )
         await callback_query.answer()
+    
+    # معالجة الأزرار الجديدة
+    elif data == "stats":
+        # عرض الإحصائيات
+        pool = await get_pool()
+        async with pool.connection() as conn:
+            async with conn.cursor() as cur:
+                # عدد القنوات
+                await cur.execute(
+                    "SELECT COUNT(*) FROM channels WHERE user_id = %s",
+                    (user.id,)
+                )
+                channel_count = (await cur.fetchone())[0] or 0
+                
+                # تاريخ أول استخدام
+                await cur.execute(
+                    "SELECT created_at FROM users WHERE user_id = %s",
+                    (user.id,)
+                )
+                user_data = await cur.fetchone()
+                created_at = user_data[0] if user_data else None
+        
+        stats_text = f"""
+📊 **الإحصائيات الخاصة بك**
+
+👤 **الاسم:** {user.first_name}
+🆔 **المعرف:** `{user.id}`
+📡 **عدد القنوات:** {channel_count}
+📅 **تاريخ التسجيل:** {created_at.strftime('%Y-%m-%d') if created_at else 'غير معروف'}
+
+━━━━━━━━━━━━━━━━━━━━━
+"""
+        
+        keyboard = [[InlineKeyboardButton("🔙 رجوع", callback_data="main_menu")]]
+        
+        await callback_query.message.edit_text(
+            stats_text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="markdown"
+        )
+        await callback_query.answer()
+    
+    elif data == "help":
+        # عرض المساعدة
+        help_text = """
+📖 **دليل الاستخدام**
+
+━━━━━━━━━━━━━━━━━━━━━
+🔹 **الأوامر المتاحة:**
+
+• /start - بدء البوت وعرض القائمة
+• /channels - إدارة القنوات
+• /cancel - إلغاء العملية الحالية
+
+━━━━━━━━━━━━━━━━━━━━━
+🔹 **كيفية إضافة قناة:**
+
+1. اضغط على "➕ إضافة قناة"
+2. أرسل معرف القناة بإحدى الطرق:
+   • @username
+   • رابط القناة
+   • ID القناة
+   • توجيه رسالة من القناة
+
+⚠️ **ملاحظة:** يجب أن يكون البوت مشرفاً في القناة
+
+━━━━━━━━━━━━━━━━━━━━━
+🔹 **للدعم والمساعدة:**
+تواصل مع المطور: @YourUsername
+"""
+        
+        keyboard = [[InlineKeyboardButton("🔙 رجوع", callback_data="main_menu")]]
+        
+        await callback_query.message.edit_text(
+            help_text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="markdown"
+        )
+        await callback_query.answer()
+    
+    elif data == "about":
+        # معلومات عن البوت
+        about_text = """
+ℹ️ **حول البوت**
+
+━━━━━━━━━━━━━━━━━━━━━
+🤖 **بوت إدارة القنوات**
+الإصدار: 1.0.0
+
+هذا البوت يساعدك في:
+• إدارة قنواتك بسهولة
+• تنظيم المحتوى
+• متابعة الإحصائيات
+
+━━━━━━━━━━━━━━━━━━━━━
+👨‍💻 **تطوير:**
+تم التطوير بواسطة فريق التطوير
+
+📅 **آخر تحديث:**
+2025-09-10
+
+━━━━━━━━━━━━━━━━━━━━━
+"""
+        
+        keyboard = [[InlineKeyboardButton("🔙 رجوع", callback_data="main_menu")]]
+        
+        await callback_query.message.edit_text(
+            about_text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="markdown"
+        )
+        await callback_query.answer()
+    
     elif data == "settings":
-        await callback_query.answer("قريباً...", show_alert=True)
+        await callback_query.answer("⚙️ الإعدادات قيد التطوير...", show_alert=True)
 
 
 # معالج أمر القنوات
