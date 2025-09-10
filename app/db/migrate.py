@@ -1,6 +1,6 @@
 import logging
 import asyncio
-import asyncpg
+import psycopg
 
 from app.core.settings import get_settings
 
@@ -38,18 +38,44 @@ BEGIN
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();
   END IF;
 END$$;
+
+-- جدول القنوات
+CREATE TABLE IF NOT EXISTS channels (
+    id SERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    channel_id BIGINT NOT NULL,
+    channel_username TEXT,
+    channel_title TEXT,
+    is_admin BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(user_id, channel_id),
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger WHERE tgname = 'channels_set_updated_at'
+  ) THEN
+    CREATE TRIGGER channels_set_updated_at
+    BEFORE UPDATE ON channels
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+  END IF;
+END$$;
+
+-- إنشاء فهرس للبحث السريع
+CREATE INDEX IF NOT EXISTS idx_channels_user_id ON channels(user_id);
 """
 
 
 async def run_migrations() -> None:
     settings = get_settings()
-    conn: asyncpg.Connection
-    conn = await asyncpg.connect(dsn=settings.database_url)
-    try:
-        await conn.execute(SCHEMA_SQL)
-        logger.info("Database schema ensured")
-    finally:
-        await conn.close()
+    async with await psycopg.AsyncConnection.connect(settings.database_url) as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(SCHEMA_SQL)
+            await conn.commit()
+            logger.info("Database schema ensured")
 
 
 if __name__ == "__main__":
