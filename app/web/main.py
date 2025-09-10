@@ -504,7 +504,7 @@ async def telegram_webhook(request: Request) -> Response:
                         ),
                         parse_mode=ParseMode.MARKDOWN
                     )
-                    await bot.set_user_state(user_id, "waiting_channels")
+                    await set_user_state(bot, user_id, "waiting_channels")
                     await answer_cbq()
 
                 elif data == "channels_delete":
