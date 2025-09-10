@@ -4,6 +4,7 @@ import httpx
 
 from fastapi import FastAPI, Request, Response, status
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from pyrogram.enums import ParseMode
 
 from app.core.logging_config import configure_logging
 from app.core.settings import get_settings
@@ -11,6 +12,8 @@ from app.core.background import BackgroundTaskQueue
 from app.bot.client import get_bot_client
 from app.db.migrate import run_migrations
 from app.bot.channels import ChannelManager
+from app.bot.header import header_menu, handle_header_callback, handle_header_text_input
+from app.bot.footer import footer_menu, handle_footer_callback, handle_footer_text_input
 from app.db.pool import get_pool, close_pool
 
 
@@ -199,7 +202,7 @@ async def telegram_webhook(request: Request) -> Response:
                         chat_id=chat_id,
                         text=welcome_text,
                         reply_markup=InlineKeyboardMarkup(keyboard),
-                        parse_mode="markdown"
+                        parse_mode=ParseMode.MARKDOWN
                     )
                 else:
                     # معالجة إدخال القنوات عندما يكون المستخدم في حالة انتظار
@@ -246,7 +249,7 @@ async def telegram_webhook(request: Request) -> Response:
                             chat_id=chat_id,
                             text=text_menu,
                             reply_markup=InlineKeyboardMarkup(keyboard),
-                            parse_mode="markdown"
+                            parse_mode=ParseMode.MARKDOWN
                         )
                     # إلغاء العملية
                     elif current_state == "waiting_channels" and text.startswith("/cancel"):
@@ -254,6 +257,9 @@ async def telegram_webhook(request: Request) -> Response:
                         await bot.send_message(chat_id=chat_id, text="❌ تم إلغاء العملية")
                     # معالجة الإدخال عندما يكون بانتظار القنوات
                     elif current_state == "waiting_channels":
+                    # تدفقات إدخال نص الهيدر/الفوتر
+                    await handle_header_text_input(bot, type("obj", (), {"from_user": type("u", (), {"id": user_id}), "text": text, "reply_text": lambda **kwargs: bot.send_message(chat_id=chat_id, **kwargs)})())
+                    await handle_footer_text_input(bot, type("obj", (), {"from_user": type("u", (), {"id": user_id}), "text": text, "reply_text": lambda **kwargs: bot.send_message(chat_id=chat_id, **kwargs)})())
                         channels_to_check = []
                         # معالجة الرسائل المحولة
                         fwd_chat = message.get("forward_from_chat")
@@ -317,7 +323,7 @@ async def telegram_webhook(request: Request) -> Response:
                             message_id=processing.id,
                             text=result_text,
                             reply_markup=InlineKeyboardMarkup(keyboard),
-                            parse_mode="markdown"
+                            parse_mode=ParseMode.MARKDOWN
                         )
 
             bg_queue.enqueue(job)
@@ -384,7 +390,7 @@ async def telegram_webhook(request: Request) -> Response:
                         message_id=message_id,
                         text=text,
                         reply_markup=InlineKeyboardMarkup(keyboard),
-                        parse_mode="markdown"
+                        parse_mode=ParseMode.MARKDOWN
                     )
                     await answer_cbq()
 
@@ -436,7 +442,7 @@ async def telegram_webhook(request: Request) -> Response:
                         message_id=message_id,
                         text=main_text,
                         reply_markup=InlineKeyboardMarkup(keyboard),
-                        parse_mode="markdown"
+                        parse_mode=ParseMode.MARKDOWN
                     )
                     await answer_cbq()
 
@@ -464,7 +470,7 @@ async def telegram_webhook(request: Request) -> Response:
                             message_id=message_id,
                             text=text,
                             reply_markup=InlineKeyboardMarkup(keyboard),
-                            parse_mode="markdown"
+                            parse_mode=ParseMode.MARKDOWN
                         )
                         await answer_cbq()
 
@@ -496,7 +502,7 @@ async def telegram_webhook(request: Request) -> Response:
 ❌ للإلغاء أرسل: /cancel
 """
                         ),
-                        parse_mode="markdown"
+                        parse_mode=ParseMode.MARKDOWN
                     )
                     await bot.set_user_state(user_id, "waiting_channels")
                     await answer_cbq()
@@ -528,7 +534,7 @@ async def telegram_webhook(request: Request) -> Response:
 """
                             ),
                             reply_markup=InlineKeyboardMarkup(keyboard),
-                            parse_mode="markdown"
+                            parse_mode=ParseMode.MARKDOWN
                         )
                         await answer_cbq()
 
@@ -571,7 +577,7 @@ async def telegram_webhook(request: Request) -> Response:
 """
                             ),
                             reply_markup=InlineKeyboardMarkup(keyboard),
-                            parse_mode="markdown"
+                            parse_mode=ParseMode.MARKDOWN
                         )
 
                 elif data == "channel_stats":
@@ -602,7 +608,7 @@ async def telegram_webhook(request: Request) -> Response:
                         message_id=message_id,
                         text=stats_text,
                         reply_markup=InlineKeyboardMarkup(keyboard),
-                        parse_mode="markdown"
+                        parse_mode=ParseMode.MARKDOWN
                     )
                     await answer_cbq()
 
@@ -640,7 +646,7 @@ async def telegram_webhook(request: Request) -> Response:
                         message_id=message_id,
                         text=stats_text,
                         reply_markup=InlineKeyboardMarkup(keyboard),
-                        parse_mode="markdown"
+                        parse_mode=ParseMode.MARKDOWN
                     )
                     await answer_cbq()
 
@@ -679,7 +685,7 @@ async def telegram_webhook(request: Request) -> Response:
                         message_id=message_id,
                         text=help_text,
                         reply_markup=InlineKeyboardMarkup(keyboard),
-                        parse_mode="markdown"
+                        parse_mode=ParseMode.MARKDOWN
                     )
                     await answer_cbq()
 
@@ -713,12 +719,71 @@ async def telegram_webhook(request: Request) -> Response:
                         message_id=message_id,
                         text=about_text,
                         reply_markup=InlineKeyboardMarkup(keyboard),
-                        parse_mode="markdown"
+                        parse_mode=ParseMode.MARKDOWN
                     )
                     await answer_cbq()
 
                 elif data == "settings":
-                    await answer_cbq("⚙️ الإعدادات قيد التطوير...", show_alert=True)
+                    # عرض اختيار قناة لإدارة الإعدادات
+                    pool2 = await get_pool()
+                    async with pool2.connection() as conn2:
+                        async with conn2.cursor() as cur2:
+                            await cur2.execute(
+                                "SELECT channel_id, channel_title FROM channels WHERE user_id = %s ORDER BY created_at DESC",
+                                (user_id,)
+                            )
+                            rows = await cur2.fetchall()
+                    if not rows:
+                        await answer_cbq("لا توجد قنوات لإعدادها", show_alert=True)
+                    else:
+                        kb = []
+                        for cid, title in rows:
+                            display = title or f"{cid}"
+                            kb.append([InlineKeyboardButton(f"⚙️ {display}", callback_data=f"settings_channel_{cid}")])
+                        kb.append([InlineKeyboardButton("🔙 رجوع", callback_data="main_menu")])
+                        await bot.edit_message_text(
+                            chat_id=chat_id,
+                            message_id=message_id,
+                            text=(
+                                """
+╭━━━━━━━━━━━━━━━━━━━━━╮
+   ⚙️ إعدادات القنوات
+╰━━━━━━━━━━━━━━━━━━━━━╯
+
+اختر قناة لإدارة الهيدر/الفوتر
+"""
+                            ),
+                            reply_markup=InlineKeyboardMarkup(kb),
+                            parse_mode=ParseMode.MARKDOWN,
+                        )
+                        await answer_cbq()
+                elif data.startswith("settings_channel_"):
+                    cid = int(data.split("_")[-1])
+                    kb = [
+                        [InlineKeyboardButton("🧩 الهيدر", callback_data=f"header_menu_{cid}")],
+                        [InlineKeyboardButton("🧩 الفوتر", callback_data=f"footer_menu_{cid}")],
+                        [InlineKeyboardButton("🔙 رجوع", callback_data="settings")],
+                    ]
+                    await bot.edit_message_text(
+                        chat_id=chat_id,
+                        message_id=message_id,
+                        text=f"إعدادات القناة: `{cid}`\n\nاختر القسم:",
+                        reply_markup=InlineKeyboardMarkup(kb),
+                        parse_mode=ParseMode.MARKDOWN,
+                    )
+                    await answer_cbq()
+                elif data.startswith("header_menu_"):
+                    cid = int(data.split("_")[-1])
+                    await header_menu(bot, type("obj", (), {"edit_text": lambda *args, **kwargs: bot.edit_message_text(chat_id=chat_id, message_id=message_id, *args, **kwargs)})(), user_id, cid)
+                    await answer_cbq()
+                elif data.startswith("footer_menu_"):
+                    cid = int(data.split("_")[-1])
+                    await footer_menu(bot, type("obj", (), {"edit_text": lambda *args, **kwargs: bot.edit_message_text(chat_id=chat_id, message_id=message_id, *args, **kwargs)})(), user_id, cid)
+                    await answer_cbq()
+                elif data.startswith("header_"):
+                    await handle_header_callback(bot, type("obj", (), {"data": data, "from_user": type("u", (), {"id": user_id}), "message": type("m", (), {"edit_text": lambda *args, **kwargs: bot.edit_message_text(chat_id=chat_id, message_id=message_id, *args, **kwargs)})()})())
+                elif data.startswith("footer_"):
+                    await handle_footer_callback(bot, type("obj", (), {"data": data, "from_user": type("u", (), {"id": user_id}), "message": type("m", (), {"edit_text": lambda *args, **kwargs: bot.edit_message_text(chat_id=chat_id, message_id=message_id, *args, **kwargs)})()})())
                 else:
                     await answer_cbq()
             except Exception as exc:  # noqa: BLE001
