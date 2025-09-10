@@ -14,7 +14,7 @@ from pyrogram.types import (
     CallbackQuery,
     Chat
 )
-from pyrogram.enums import ParseMode, ChatType
+from pyrogram.enums import ParseMode, ChatType, ChatMemberStatus
 from pyrogram.errors import (
     UserNotParticipant,
     ChatAdminRequired,
@@ -112,7 +112,7 @@ class ChannelManager:
             logger.info(f"حالة البوت: {bot_member.status}")
             
             # التحقق من أن البوت مشرف
-            if bot_member.status in ["administrator", "creator"]:
+            if bot_member.status in [ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER]:
                 logger.info(f"✅ البوت مشرف في {chat.title}")
                 return True, chat
             else:
