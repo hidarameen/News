@@ -257,9 +257,9 @@ async def telegram_webhook(request: Request) -> Response:
                         await bot.send_message(chat_id=chat_id, text="❌ تم إلغاء العملية")
                     # معالجة الإدخال عندما يكون بانتظار القنوات
                     elif current_state == "waiting_channels":
-                    # تدفقات إدخال نص الهيدر/الفوتر
-                    await handle_header_text_input(bot, type("obj", (), {"from_user": type("u", (), {"id": user_id}), "text": text, "reply_text": lambda **kwargs: bot.send_message(chat_id=chat_id, **kwargs)})())
-                    await handle_footer_text_input(bot, type("obj", (), {"from_user": type("u", (), {"id": user_id}), "text": text, "reply_text": lambda **kwargs: bot.send_message(chat_id=chat_id, **kwargs)})())
+                        # تدفقات إدخال نص الهيدر/الفوتر
+                        await handle_header_text_input(bot, type("obj", (), {"from_user": type("u", (), {"id": user_id}), "text": text, "reply_text": lambda **kwargs: bot.send_message(chat_id=chat_id, **kwargs)})())
+                        await handle_footer_text_input(bot, type("obj", (), {"from_user": type("u", (), {"id": user_id}), "text": text, "reply_text": lambda **kwargs: bot.send_message(chat_id=chat_id, **kwargs)})())
                         channels_to_check = []
                         # معالجة الرسائل المحولة
                         fwd_chat = message.get("forward_from_chat")
