@@ -97,22 +97,26 @@ async def telegram_webhook(request: Request) -> Response:
             # Enqueue background processing to avoid blocking webhook
             async def job() -> None:
                 pool = await get_pool()
-                await pool.execute(
-                    """
-                    INSERT INTO users (user_id, username, first_name, last_name, language_code)
-                    VALUES ($1, $2, $3, $4, $5)
-                    ON CONFLICT (user_id) DO UPDATE SET
-                        username = EXCLUDED.username,
-                        first_name = EXCLUDED.first_name,
-                        last_name = EXCLUDED.last_name,
-                        language_code = EXCLUDED.language_code
-                    """,
-                    int(from_user.get("id", chat_id)),
-                    from_user.get("username"),
-                    from_user.get("first_name"),
-                    from_user.get("last_name"),
-                    from_user.get("language_code"),
-                )
+                async with pool.connection() as conn:
+                    async with conn.cursor() as cur:
+                        await cur.execute(
+                            """
+                            INSERT INTO users (user_id, username, first_name, last_name, language_code)
+                            VALUES (%s, %s, %s, %s, %s)
+                            ON CONFLICT (user_id) DO UPDATE SET
+                                username = EXCLUDED.username,
+                                first_name = EXCLUDED.first_name,
+                                last_name = EXCLUDED.last_name,
+                                language_code = EXCLUDED.language_code
+                            """,
+                            (
+                                int(from_user.get("id", chat_id)),
+                                from_user.get("username"),
+                                from_user.get("first_name"),
+                                from_user.get("last_name"),
+                                from_user.get("language_code"),
+                            ),
+                        )
 
                 if text.startswith("/start"):
                     await bot.send_message(chat_id=chat_id, text="مرحبًا بك في البوت! ✨")
