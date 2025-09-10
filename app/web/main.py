@@ -3,6 +3,7 @@ from typing import Any, Dict, Optional
 import httpx
 
 from fastapi import FastAPI, Request, Response, status
+from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from app.core.logging_config import configure_logging
 from app.core.settings import get_settings
@@ -119,7 +120,68 @@ async def telegram_webhook(request: Request) -> Response:
                         )
 
                 if text.startswith("/start"):
-                    await bot.send_message(chat_id=chat_id, text="مرحبًا بك في البوت! ✨")
+                    # احصاء القنوات للمستخدم
+                    user_id = int(from_user.get("id", chat_id))
+                    channel_count = 0
+                    pool2 = await get_pool()
+                    async with pool2.connection() as conn2:
+                        async with conn2.cursor() as cur2:
+                            await cur2.execute(
+                                "SELECT COUNT(*) FROM channels WHERE user_id = %s",
+                                (user_id,)
+                            )
+                            row = await cur2.fetchone()
+                            channel_count = (row[0] if row else 0) or 0
+
+                    # لوحة المفاتيح الرئيسية
+                    keyboard = [
+                        [
+                            InlineKeyboardButton("📡 قنواتي", callback_data="channels_menu"),
+                            InlineKeyboardButton("➕ إضافة قناة", callback_data="channels_add")
+                        ],
+                        [
+                            InlineKeyboardButton("📋 عرض القنوات", callback_data="channels_list"),
+                            InlineKeyboardButton("🗑 حذف قناة", callback_data="channels_delete")
+                        ],
+                        [
+                            InlineKeyboardButton("📊 الإحصائيات", callback_data="stats"),
+                            InlineKeyboardButton("⚙️ الإعدادات", callback_data="settings")
+                        ],
+                        [
+                            InlineKeyboardButton("📖 المساعدة", callback_data="help"),
+                            InlineKeyboardButton("ℹ️ حول البوت", callback_data="about")
+                        ]
+                    ]
+
+                    # رسالة ترحيب مع إحصائيات مختصرة
+                    first_name = from_user.get("first_name") or ""
+                    welcome_text = f"""
+╭━━━━━━━━━━━━━━━━━━━━━╮
+    🤖 **مرحباً بك في بوت إدارة القنوات**
+╰━━━━━━━━━━━━━━━━━━━━━╯
+
+👤 **المستخدم:** {first_name}
+🆔 **معرفك:** `{user_id}`
+📡 **القنوات المضافة:** {channel_count}
+
+━━━━━━━━━━━━━━━━━━━━━
+🎯 **الميزات المتاحة:**
+
+• إدارة قنواتك بسهولة
+• إضافة وحذف القنوات
+• عرض إحصائيات مفصلة
+• واجهة سهلة الاستخدام
+
+━━━━━━━━━━━━━━━━━━━━━
+⬇️ **اختر من القائمة أدناه:**
+"""
+
+                    await bot.send_message(
+                        chat_id=chat_id,
+                        text=welcome_text,
+                        reply_markup=InlineKeyboardMarkup(keyboard),
+                        parse_mode="markdown"
+                    )
 
             bg_queue.enqueue(job)
 
