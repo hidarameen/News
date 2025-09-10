@@ -775,16 +775,16 @@ async def telegram_webhook(request: Request) -> Response:
                     await answer_cbq()
                 elif data.startswith("header_menu_"):
                     cid = int(data.split("_")[-1])
-                    await header_menu(bot, type("obj", (), {"edit_text": lambda *args, **kwargs: bot.edit_message_text(chat_id=chat_id, message_id=message_id, *args, **kwargs)})(), user_id, cid)
+                    await header_menu(bot, type("obj", (), {"edit_text": lambda *args, **kwargs: bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=args[0] if args else kwargs.get('text'), reply_markup=kwargs.get('reply_markup'), parse_mode=kwargs.get('parse_mode'))})(), user_id, cid)
                     await answer_cbq()
                 elif data.startswith("footer_menu_"):
                     cid = int(data.split("_")[-1])
-                    await footer_menu(bot, type("obj", (), {"edit_text": lambda *args, **kwargs: bot.edit_message_text(chat_id=chat_id, message_id=message_id, *args, **kwargs)})(), user_id, cid)
+                    await footer_menu(bot, type("obj", (), {"edit_text": lambda *args, **kwargs: bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=args[0] if args else kwargs.get('text'), reply_markup=kwargs.get('reply_markup'), parse_mode=kwargs.get('parse_mode'))})(), user_id, cid)
                     await answer_cbq()
                 elif data.startswith("header_"):
-                    await handle_header_callback(bot, type("obj", (), {"data": data, "from_user": type("u", (), {"id": user_id}), "message": type("m", (), {"edit_text": lambda *args, **kwargs: bot.edit_message_text(chat_id=chat_id, message_id=message_id, *args, **kwargs)})()})())
+                    await handle_header_callback(bot, type("obj", (), {"data": data, "from_user": type("u", (), {"id": user_id}), "message": type("m", (), {"edit_text": lambda *args, **kwargs: bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=args[0] if args else kwargs.get('text'), reply_markup=kwargs.get('reply_markup'), parse_mode=kwargs.get('parse_mode'))})()})())
                 elif data.startswith("footer_"):
-                    await handle_footer_callback(bot, type("obj", (), {"data": data, "from_user": type("u", (), {"id": user_id}), "message": type("m", (), {"edit_text": lambda *args, **kwargs: bot.edit_message_text(chat_id=chat_id, message_id=message_id, *args, **kwargs)})()})())
+                    await handle_footer_callback(bot, type("obj", (), {"data": data, "from_user": type("u", (), {"id": user_id}), "message": type("m", (), {"edit_text": lambda *args, **kwargs: bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=args[0] if args else kwargs.get('text'), reply_markup=kwargs.get('reply_markup'), parse_mode=kwargs.get('parse_mode'))})()})()))
                 else:
                     await answer_cbq()
             except Exception as exc:  # noqa: BLE001
